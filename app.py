@@ -109,7 +109,7 @@ LOGIN_TEMPLATE = '''
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>系統登入 - 護理之家教育訓練管理系統</title>
+    <title>系統登入 - 家園教育訓練管理系統</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light d-flex align-items-center justify-content-center" style="height: 100vh;">
@@ -147,7 +147,7 @@ HTML_TEMPLATE = '''
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>護理之家教育訓練統計管理系統</title>
+    <title>家園教育訓練統計管理系統</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light pb-5">
