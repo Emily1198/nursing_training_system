@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 
 import libsql_experimental as libsql
 
-# 替換原來的 sqlite3.connect
+# 1. 統一資料庫連接函數 (Turso LibSQL)
 def get_db_connection():
     return libsql.connect(
         database="libsql://nursing-db-xxxx.turso.io",
@@ -20,11 +20,10 @@ def get_db_connection():
 
 app = Flask(__name__)
 app.secret_key = 'nursing_secret_key_secure_2026'
-DB_NAME = 'nursing_training.db'
 
-# 初始化資料庫 (自動相容舊版結構)
+# 2. 初始化資料庫 (使用 get_db_connection)
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -54,7 +53,7 @@ def init_db():
                     has_ltc_points INTEGER DEFAULT 0
                 )''')
                 
-    # 自動補欄位機制 (若舊資料庫缺欄位時使用)
+    # 自動補欄位機制
     c.execute("PRAGMA table_info(courses)")
     columns = [col[1] for col in c.fetchall()]
     if 'has_nursing_points' not in columns:
@@ -101,39 +100,51 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# ================= 修正處：登入頁面範本 (在卡片上方加入醒目的系統標題) =================
 LOGIN_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>系統登入 - 家園教育訓練統計管理系統</title>
+    <title>護理機構教育訓練管理系統 - 系統登入</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="bg-light d-flex align-items-center justify-content-center" style="height: 100vh;">
-<div class="card shadow-lg" style="width: 380px;">
-    <div class="card-header bg-dark text-white text-center py-3">
-        <h4 class="mb-0">🏥 管理員登入</h4>
+<body class="bg-light d-flex align-items-center justify-content-center" style="min-height: 100vh;">
+<div class="text-center" style="width: 100%; max-width: 400px;">
+
+    <!-- 🌟 登入區上方：系統大標題 🌟 -->
+    <div class="mb-4">
+        <h2 class="fw-bold text-primary mb-1">🏥 護理訓練管理系統</h2>
+        <p class="text-muted small mb-0">家園教育訓練與完訓統計管理平台</p>
     </div>
-    <div class="card-body p-4">
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            {% for message in messages %}
-              <div class="alert alert-danger py-2 small">{{ message|safe }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-        <form action="/login" method="post">
-            <div class="mb-3">
-                <label class="form-label fw-bold">帳號</label>
-                <input type="text" name="username" class="form-control" placeholder="預設: admin" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-bold">密碼</label>
-                <input type="password" name="password" class="form-control" placeholder="預設: admin123" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 fw-bold py-2">登入系統</button>
-        </form>
+
+    <!-- 登入卡片 -->
+    <div class="card shadow-lg text-start">
+        <div class="card-header bg-dark text-white text-center py-3">
+            <h5 class="mb-0 fw-bold">🔒 管理員登入</h5>
+        </div>
+        <div class="card-body p-4">
+            {% with messages = get_flashed_messages() %}
+              {% if messages %}
+                {% for message in messages %}
+                  <div class="alert alert-danger py-2 small">{{ message|safe }}</div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+            <form action="/login" method="post">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">帳號</label>
+                    <input type="text" name="username" class="form-control" placeholder="預設: admin" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">密碼</label>
+                    <input type="password" name="password" class="form-control" placeholder="預設: admin123" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-bold py-2 mt-2">登入系統</button>
+            </form>
+        </div>
     </div>
+    
 </div>
 </body>
 </html>
@@ -195,7 +206,7 @@ HTML_TEMPLATE = '''
             </div>
         </div>
 
-        <!-- 2. 建立課程 (新增積分選單) -->
+        <!-- 2. 建立課程 -->
         <div class="col-md-7 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-success text-white font-weight-bold">📚 建立新課程</div>
@@ -232,7 +243,6 @@ HTML_TEMPLATE = '''
                                 </select>
                             </div>
                         </div>
-                        <!-- 新增積分核取欄位 -->
                         <div class="mb-3 bg-light p-2 rounded border">
                             <span class="small fw-bold me-3">🎖️ 積分屬性設定：</span>
                             <div class="form-check form-check-inline">
@@ -380,7 +390,7 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <!-- 5. 🌟 查核統計與一鍵產生 Excel 總報表 (含積分篩選) 🌟 -->
+    <!-- 5. 查核統計與一鍵產生 Excel 總報表 -->
     <div class="card shadow-sm mb-4 border-dark">
         <div class="card-header bg-dark text-white font-weight-bold">📊 查核統計與一鍵產生 Excel 總報表</div>
         <div class="card-body bg-white">
@@ -401,7 +411,6 @@ HTML_TEMPLATE = '''
                         {% endfor %}
                     </select>
                 </div>
-                <!-- 新增積分條件篩選器 -->
                 <div class="col-md-4">
                     <label class="form-label fw-bold">🎖️ 積分屬性 (篩選)</label>
                     <select name="points_filter" class="form-select">
@@ -526,7 +535,7 @@ HTML_TEMPLATE = '''
 '''
 
 def get_dropdown_options():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT category_type, option_name FROM dropdown_options")
     rows = c.fetchall()
@@ -543,7 +552,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password'].strip()
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT id, username FROM users WHERE username = ? AND password = ?", (username, password))
         user = c.fetchone()
@@ -567,7 +576,7 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, emp_no, name, position, status FROM employees ORDER BY emp_no ASC")
     employees = c.fetchall()
@@ -594,13 +603,13 @@ def add_dropdown_option():
     opt_name = request.form['option_name'].strip()
     
     if opt_name:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         c = conn.cursor()
         try:
             c.execute("INSERT INTO dropdown_options (category_type, option_name) VALUES (?, ?)", (cat_type, opt_name))
             conn.commit()
             flash(f"✅ 已成功新增選項【{opt_name}】！")
-        except sqlite3.IntegrityError:
+        except Exception:
             flash(f"⚠️ 選項【{opt_name}】已經存在！")
         finally:
             conn.close()
@@ -612,7 +621,7 @@ def delete_dropdown_option():
     cat_type = request.form['category_type']
     opt_name = request.form['option_name']
     
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM dropdown_options WHERE category_type = ? AND option_name = ?", (cat_type, opt_name))
     conn.commit()
@@ -628,7 +637,7 @@ def update_account():
     new_password = request.form['new_password'].strip()
     user_id = session.get('user_id')
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT password FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
@@ -655,13 +664,13 @@ def add_employee():
     emp_no = request.form['emp_no'].strip()
     name = request.form['name'].strip()
     position = request.form['position']
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     try:
         c.execute("INSERT INTO employees (emp_no, name, position) VALUES (?, ?, ?)", (emp_no, name, position))
         conn.commit()
         flash(f"✅ 已新增員工：{name} ({position})")
-    except sqlite3.IntegrityError:
+    except Exception:
         flash("❌ 新增失敗：工號已存在！")
     finally:
         conn.close()
@@ -671,7 +680,7 @@ def add_employee():
 @login_required
 def update_employee(emp_id):
     status = request.form['status']
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("UPDATE employees SET status = ? WHERE id = ?", (status, emp_id))
     conn.commit()
@@ -690,14 +699,16 @@ def add_course():
     method = request.form['method']
     has_nursing = 1 if request.form.get('has_nursing_points') else 0
     has_ltc = 1 if request.form.get('has_ltc_points') else 0
-    
-    conn = sqlite3.connect(DB_NAME)
+
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO courses (course_date, title, category, hours, source, method, has_nursing_points, has_ltc_points) VALUES (?,?,?,?,?,?,?,?)",
-              (c_date, title, category, hours, source, method, has_nursing, has_ltc))
+    c.execute('''
+        INSERT INTO courses (course_date, title, category, hours, source, method, has_nursing_points, has_ltc_points)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (c_date, title, category, hours, source, method, has_nursing, has_ltc))
     conn.commit()
     conn.close()
-    flash(f"✅ 課程【{title}】建立成功！")
+    flash(f"✅ 已建立課程：{title}")
     return redirect(url_for('index'))
 
 @app.route('/add_single_record', methods=['POST'])
@@ -705,17 +716,19 @@ def add_course():
 def add_single_record():
     course_id = request.form['course_id']
     employee_id = request.form['employee_id']
-    completion_date = request.form['completion_date']
-    
-    conn = sqlite3.connect(DB_NAME)
+    comp_date = request.form['completion_date']
+
+    conn = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO training_records (course_id, employee_id, completion_date) VALUES (?, ?, ?)",
-                  (course_id, employee_id, completion_date))
+        c.execute('''
+            INSERT INTO training_records (course_id, employee_id, completion_date)
+            VALUES (?, ?, ?)
+        ''', (course_id, employee_id, comp_date))
         conn.commit()
-        flash("✅ 完訓紀錄登錄成功！")
-    except sqlite3.IntegrityError:
-        flash("⚠️ 該員工已有此課程之完訓紀錄。")
+        flash("✅ 已成功登錄完訓紀錄！")
+    except Exception:
+        flash("⚠️ 該員工已登錄過此課程，請勿重複登錄！")
     finally:
         conn.close()
     return redirect(url_for('index'))
@@ -725,369 +738,226 @@ def add_single_record():
 def upload_batch_records():
     course_id = request.form['course_id']
     file = request.files.get('excel_file')
-    
-    if not file or file.filename == '':
-        flash("❌ 請選擇 Excel 檔案！")
+
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        flash("❌ 請上傳有效的 Excel 檔案 (.xlsx 或 .xls)！")
         return redirect(url_for('index'))
-        
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT course_date FROM courses WHERE id = ?", (course_id,))
-    course_info = c.fetchone()
-    default_date = course_info[0] if course_info else ''
-    
+
     try:
         df = pd.read_excel(file)
         if '姓名' not in df.columns:
-            flash("❌ Excel 檔案內缺少「姓名」欄位！")
-            conn.close()
+            flash("❌ Excel 檔案內找不到「姓名」欄位！")
             return redirect(url_for('index'))
-            
-        matched = 0
-        for idx, row in df.iterrows():
-            name = str(row['姓名']).strip()
-            c_date = str(row['完訓日期']).split(' ')[0].strip() if '完訓日期' in df.columns and pd.notna(row['完訓日期']) else default_date
-            
-            c.execute("SELECT id FROM employees WHERE name = ?", (name,))
-            emp = c.fetchone()
-            if emp:
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT course_date FROM courses WHERE id = ?", (course_id,))
+        course = c.fetchone()
+        default_date = course[0] if course else datetime.now().strftime('%Y-%m-%d')
+
+        c.execute("SELECT id, name FROM employees")
+        emp_dict = {row[1].strip(): row[0] for row in c.fetchall()}
+
+        success_count = 0
+        skip_count = 0
+        not_found = []
+
+        for _, row in df.iterrows():
+            name = str(row['姓名']).strip() if pd.notna(row['姓名']) else ''
+            if not name:
+                continue
+
+            comp_date = default_date
+            if '完訓日期' in df.columns and pd.notna(row['完訓日期']):
+                comp_date = str(row['完訓日期']).split(' ')[0]
+
+            if name in emp_dict:
+                emp_id = emp_dict[name]
                 try:
-                    c.execute("INSERT INTO training_records (course_id, employee_id, completion_date) VALUES (?, ?, ?)",
-                              (course_id, emp[0], c_date))
-                    matched += 1
-                except sqlite3.IntegrityError:
-                    pass
+                    c.execute('''
+                        INSERT INTO training_records (course_id, employee_id, completion_date)
+                        VALUES (?, ?, ?)
+                    ''', (course_id, emp_id, comp_date))
+                    success_count += 1
+                except Exception:
+                    skip_count += 1
+            else:
+                not_found.append(name)
+
         conn.commit()
-        flash(f"✅ 批次匯入完成！成功登錄 {matched} 人完訓。")
-    except Exception as e:
-        flash(f"❌ Excel 處理失敗：{str(e)}")
-    finally:
         conn.close()
+
+        msg = f"🎉 匯入完成！成功：{success_count} 筆"
+        if skip_count > 0:
+            msg += f"，跳過重複：{skip_count} 筆"
+        if not_found:
+            msg += f"，未找到員工姓名：{', '.join(not_found)}"
+        flash(msg)
+
+    except Exception as e:
+        flash(f"❌ 處理 Excel 時發生錯誤：{str(e)}")
+
     return redirect(url_for('index'))
 
-@app.route('/export_excel_router', methods=['GET'])
+@app.route('/export_excel_router')
 @login_required
 def export_excel_router():
     report_type = request.args.get('report_type', 'cross_tab')
+    category = request.args.get('category', '')
+    points_filter = request.args.get('points_filter', '')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+
+    conn = get_db_connection()
     
-    if report_type == 'multi_sheet':
-        return export_multi_sheet_excel()
-    else:
-        return export_cross_tab_excel()
-
-# -------------------------------------------------------------
-# 報表 A：評鑑專用交叉查核矩陣總表 (支援積分標註與篩選)
-# -------------------------------------------------------------
-def export_cross_tab_excel():
-    category_filter = request.args.get('category', '').strip()
-    points_filter = request.args.get('points_filter', '').strip()
-    start_date = request.args.get('start_date', '').strip()
-    end_date = request.args.get('end_date', '').strip()
-
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    course_query = "SELECT id, course_date, title, hours, source, method, has_nursing_points, has_ltc_points FROM courses WHERE 1=1"
+    # 構建基礎 SQL 條件
+    sql_where = []
     params = []
-    if category_filter:
-        course_query += " AND category = ?"
-        params.append(category_filter)
+
+    if category:
+        sql_where.append("c.category = ?")
+        params.append(category)
+    
     if points_filter == 'nursing':
-        course_query += " AND has_nursing_points = 1"
+        sql_where.append("c.has_nursing_points = 1")
     elif points_filter == 'ltc':
-        course_query += " AND has_ltc_points = 1"
+        sql_where.append("c.has_ltc_points = 1")
     elif points_filter == 'both':
-        course_query += " AND has_nursing_points = 1 AND has_ltc_points = 1"
+        sql_where.append("c.has_nursing_points = 1 AND c.has_ltc_points = 1")
 
     if start_date:
-        course_query += " AND course_date >= ?"
+        sql_where.append("c.course_date >= ?")
         params.append(start_date)
     if end_date:
-        course_query += " AND course_date <= ?"
+        sql_where.append("c.course_date <= ?")
         params.append(end_date)
-    course_query += " ORDER BY course_date DESC"
 
-    c.execute(course_query, params)
-    raw_courses = c.fetchall()
-
-    if not raw_courses:
-        flash("⚠️ 指定篩選條件下無任何課程資料！")
-        conn.close()
-        return redirect(url_for('index'))
-
-    courses_by_year = {}
-    for c_id, c_date, title, hours, source, method, h_nursing, h_ltc in raw_courses:
-        try:
-            dt = datetime.strptime(c_date, '%Y-%m-%d')
-            roc_year = str(dt.year - 1911)
-        except:
-            roc_year = "其他"
-            
-        if roc_year not in courses_by_year:
-            courses_by_year[roc_year] = []
-        
-        # 抬頭加上積分標註
-        tag = ""
-        if h_nursing and h_ltc: tag = "[護/長] "
-        elif h_nursing: tag = "[護] "
-        elif h_ltc: tag = "[長] "
-        
-        courses_by_year[roc_year].append({
-            'id': c_id, 'date': c_date, 'title': tag + title, 
-            'hours': hours, 'source': source, 'method': method
-        })
-
-    c.execute("SELECT id, position, name FROM employees WHERE status = '在職' ORDER BY id ASC")
-    employees = c.fetchall()
-
-    c.execute("SELECT course_id, employee_id, completion_date FROM training_records")
-    records = {(r[0], r[1]): r[2] for r in c.fetchall()}
-
-    conn.close()
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "教育課程清冊總表"
-
-    font_title = Font(name='標楷體', size=16, bold=True)
-    font_subtitle = Font(name='標楷體', size=10)
-    font_header = Font(name='新細明體', size=10, bold=True)
-    font_data = Font(name='新細明體', size=10)
-    
-    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    align_right = Alignment(horizontal='right', vertical='center')
-
-    fill_pink = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
-    fill_orange = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    border_thin = Side(border_style="thin", color="000000")
-    box_border = Border(left=border_thin, right=border_thin, top=border_thin, bottom=border_thin)
-
-    all_dates = [c['date'] for y in courses_by_year for c in courses_by_year[y]]
-    min_date_str = min(all_dates) if all_dates else ""
-    max_date_str = max(all_dates) if all_dates else ""
-    
-    title_text = f"{category_filter if category_filter else '教育課程'} 清冊總表"
-    if min_date_str and max_date_str:
-        d1 = datetime.strptime(min_date_str, '%Y-%m-%d')
-        d2 = datetime.strptime(max_date_str, '%Y-%m-%d')
-        title_text = f"{d1.year-1911}/{d1.month}/{d1.day} - {d2.year-1911}年-{title_text}"
-
-    ws.row_dimensions[1].height = 30
-    ws.cell(row=1, column=1, value=title_text).font = font_title
-    ws.cell(row=1, column=1).alignment = align_center
-
-    ws.row_dimensions[2].height = 18
-    ws.cell(row=2, column=1, value="每年安排相關教育訓練(>4Hr/人)，此次檢附教育訓練之課程佐證(簽到、照片、講義)").font = font_subtitle
-    
-    today_roc = f"{datetime.now().year - 1911}/{datetime.now().month}/{datetime.now().day}"
-    
-    col_idx = 4
-    year_col_spans = {}
-    
-    for year, c_list in courses_by_year.items():
-        start_col = col_idx
-        col_idx += len(c_list)
-        end_col = col_idx
-        year_col_spans[year] = (start_col, end_col, c_list)
-        col_idx += 1
-
-    total_max_cols = col_idx - 1
-    
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_max_cols)
-    ws.cell(row=2, column=total_max_cols, value=f"整理日期：{today_roc}").font = font_subtitle
-    ws.cell(row=2, column=total_max_cols).alignment = align_right
-
-    ws.merge_cells('A3:A5'); ws.cell(row=3, column=1, value="序號").alignment = align_center
-    ws.merge_cells('B3:B5'); ws.cell(row=3, column=2, value="職稱").alignment = align_center
-    ws.merge_cells('C3:C5'); ws.cell(row=3, column=3, value="姓名").alignment = align_center
-
-    for year, (s_col, e_col, c_list) in year_col_spans.items():
-        ws.merge_cells(start_row=3, start_column=s_col, end_row=3, end_column=e_col)
-        cell_y = ws.cell(row=3, column=s_col, value=f"{year} 年度" if year != "其他" else "其他年度")
-        cell_y.alignment = align_center
-        cell_y.font = font_header
-
-        for idx, course in enumerate(c_list):
-            curr_col = s_col + idx
-            c_name_cell = ws.cell(row=4, column=curr_col, value=course['title'])
-            c_name_cell.alignment = align_center
-            c_name_cell.font = font_data
-            
-            method_str = f"{course['source']}/{int(course['hours'])}Hr" if course['hours'].is_integer() else f"{course['source']}/{course['hours']}Hr"
-            ws.cell(row=5, column=curr_col, value=method_str).alignment = align_center
-            
-        ws.merge_cells(start_row=4, start_column=e_col, end_row=5, end_column=e_col)
-        ws.cell(row=4, column=e_col, value="總時數").alignment = align_center
-
-    current_row = 6
-    for emp_idx, (emp_id, pos, name) in enumerate(employees, start=1):
-        ws.row_dimensions[current_row].height = 20
-        ws.cell(row=current_row, column=1, value=emp_idx).alignment = align_center
-        ws.cell(row=current_row, column=2, value=pos).alignment = align_center
-        ws.cell(row=current_row, column=3, value=name).alignment = align_center
-
-        for year, (s_col, e_col, c_list) in year_col_spans.items():
-            year_hours_sum = 0
-            for idx, course in enumerate(c_list):
-                curr_col = s_col + idx
-                key = (course['id'], emp_id)
-                if key in records:
-                    comp_date = records[key]
-                    try:
-                        dt = datetime.strptime(comp_date, '%Y-%m-%d')
-                        disp_date = f"{dt.year-1911}.{dt.month:02d}.{dt.day:02d}"
-                    except:
-                        disp_date = comp_date
-                    ws.cell(row=current_row, column=curr_col, value=disp_date).alignment = align_center
-                    year_hours_sum += course['hours']
-                else:
-                    ws.cell(row=current_row, column=curr_col, value="X").alignment = align_center
-
-            ws.cell(row=current_row, column=e_col, value=year_hours_sum if year_hours_sum > 0 else 0).alignment = align_center
-
-        current_row += 1
-
-    for r in range(3, current_row):
-        for c_i in range(1, total_max_cols + 1):
-            cell = ws.cell(row=r, column=c_i)
-            cell.border = box_border
-            if r in [3, 4, 5]:
-                cell.font = font_header
-                cell.fill = fill_pink if c_i <= (total_max_cols // 2 + 1) else fill_orange
-
-    ws.column_dimensions['A'].width = 6
-    ws.column_dimensions['B'].width = 16
-    ws.column_dimensions['C'].width = 10
-    for c_i in range(4, total_max_cols + 1):
-        ws.column_dimensions[get_column_letter(c_i)].width = 16
+    where_clause = " WHERE " + " AND ".join(sql_where) if sql_where else ""
 
     output = io.BytesIO()
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    thin_border = Border(
+        left=Side(style='thin', color='CCCCCC'),
+        right=Side(style='thin', color='CCCCCC'),
+        top=Side(style='thin', color='CCCCCC'),
+        bottom=Side(style='thin', color='CCCCCC')
+    )
+
+    if report_type == 'cross_tab':
+        ws = wb.create_sheet(title="交叉查核矩陣總表")
+        
+        courses_query = f"SELECT id, course_date, title, hours, category FROM courses c {where_clause} ORDER BY course_date ASC"
+        df_courses = pd.read_sql_query(courses_query, conn, params=params)
+
+        df_emps = pd.read_sql_query("SELECT id, emp_no, name, position FROM employees WHERE status='在職' ORDER BY emp_no ASC", conn)
+
+        records_query = '''
+            SELECT r.course_id, r.employee_id, r.completion_date
+            FROM training_records r
+            JOIN courses c ON r.course_id = c.id
+        ''' + where_clause
+        df_records = pd.read_sql_query(records_query, conn, params=params)
+        record_set = set(zip(df_records['course_id'], df_records['employee_id']))
+        date_map = {(r['course_id'], r['employee_id']): r['completion_date'] for _, r in df_records.iterrows()}
+
+        ws.merge_cells('A1:D1')
+        ws['A1'] = "🏥 教育訓練完訓交叉查核矩陣總表"
+        ws['A1'].font = Font(size=14, bold=True, color='1F4E78')
+        
+        headers = ['工號', '姓名', '職位', '完訓總時數']
+        for _, c_row in df_courses.iterrows():
+            headers.append(f"{c_row['course_date']}\n{c_row['title']}\n({c_row['hours']}小時)")
+
+        ws.append(headers)
+        
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=2, column=col_idx)
+            cell.fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        for r_idx, e_row in df_emps.iterrows():
+            emp_id = e_row['id']
+            row_data = [e_row['emp_no'], e_row['name'], e_row['position'], 0]
+            
+            total_hours = 0.0
+            for _, c_row in df_courses.iterrows():
+                c_id = c_row['id']
+                if (c_id, emp_id) in record_set:
+                    comp_date = date_map.get((c_id, emp_id), '')
+                    row_data.append(f"V\n({comp_date})")
+                    total_hours += float(c_row['hours'])
+                else:
+                    row_data.append("X")
+            
+            row_data[3] = total_hours
+            ws.append(row_data)
+
+            curr_row = r_idx + 3
+            for c_idx in range(1, len(row_data) + 1):
+                cell = ws.cell(row=curr_row, column=c_idx)
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                if c_idx > 4:
+                    if cell.value.startswith("V"):
+                        cell.fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
+                    else:
+                        cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+
+    else:
+        ws1 = wb.create_sheet(title="個人完訓統計表")
+        ws2 = wb.create_sheet(title="課程完訓明細")
+
+        p_query = '''
+            SELECT e.emp_no AS 工號, e.name AS 姓名, e.position AS 職位,
+                   COUNT(r.id) AS 完訓門數, SUM(COALESCE(c.hours, 0)) AS 總參訓時數
+            FROM employees e
+            LEFT JOIN training_records r ON e.id = r.employee_id
+            LEFT JOIN courses c ON r.course_id = c.id
+        ''' + where_clause + '''
+            GROUP BY e.id
+            ORDER BY e.emp_no ASC
+        '''
+        df_p = pd.read_sql_query(p_query, conn, params=params)
+        
+        ws1.append(list(df_p.columns))
+        for r in df_p.itertuples(index=False):
+            ws1.append(list(r))
+
+        d_query = '''
+            SELECT c.course_date AS 課程日期, c.title AS 課程名稱, c.category AS 類別,
+                   c.hours AS 時數, e.emp_no AS 工號, e.name AS 姓名, e.position AS 職位,
+                   r.completion_date AS 實際完訓日期
+            FROM training_records r
+            JOIN courses c ON r.course_id = c.id
+            JOIN employees e ON r.employee_id = e.id
+        ''' + where_clause + ' ORDER BY c.course_date DESC, e.emp_no ASC'
+        df_d = pd.read_sql_query(d_query, conn, params=params)
+
+        ws2.append(list(df_d.columns))
+        for r in df_d.itertuples(index=False):
+            ws2.append(list(r))
+
+    for sheet in wb.worksheets:
+        for col in sheet.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            sheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    conn.close()
+    
     wb.save(output)
     output.seek(0)
     
-    filename = f"護理之家_評鑑專用交叉查核總表_{datetime.now().strftime('%Y%m%d')}.xlsx"
-    return send_file(output, download_name=filename, as_attachment=True)
-
-# -------------------------------------------------------------
-# 報表 B：簡易統計報表 (多分頁 Excel，含積分專屬欄位)
-# -------------------------------------------------------------
-def export_multi_sheet_excel():
-    category_filter = request.args.get('category', '').strip()
-    points_filter = request.args.get('points_filter', '').strip()
-    start_date = request.args.get('start_date', '').strip()
-    end_date = request.args.get('end_date', '').strip()
-
-    conn = sqlite3.connect(DB_NAME)
-    
-    # 1. Sheet1: 員工完訓時數統計總表
-    emp_query = '''
-        SELECT e.emp_no AS 工號, e.name AS 姓名, e.position AS 職稱, e.status AS 狀態,
-               COALESCE(SUM(c.hours), 0) AS 完訓總時數,
-               COUNT(r.id) AS 完訓總門數
-        FROM employees e
-        LEFT JOIN training_records r ON e.id = r.employee_id
-        LEFT JOIN courses c ON r.course_id = c.id
-        WHERE 1=1
-    '''
-    params = []
-    if category_filter:
-        emp_query += " AND (c.category = ? OR c.category IS NULL)"
-        params.append(category_filter)
-    if points_filter == 'nursing':
-        emp_query += " AND (c.has_nursing_points = 1 OR c.id IS NULL)"
-    elif points_filter == 'ltc':
-        emp_query += " AND (c.has_ltc_points = 1 OR c.id IS NULL)"
-    elif points_filter == 'both':
-        emp_query += " AND (c.has_nursing_points = 1 AND c.has_ltc_points = 1 OR c.id IS NULL)"
-
-    if start_date:
-        emp_query += " AND (c.course_date >= ? OR c.course_date IS NULL)"
-        params.append(start_date)
-    if end_date:
-        emp_query += " AND (c.course_date <= ? OR c.course_date IS NULL)"
-        params.append(end_date)
-    emp_query += " GROUP BY e.id ORDER BY e.emp_no ASC"
-    
-    df_emp_summary = pd.read_sql_query(emp_query, conn, params=params)
-
-    # 2. Sheet2: 課程開課統計表 (含積分)
-    course_query = '''
-        SELECT c.course_date AS 開課日期, c.title AS 課程名稱, c.category AS 課程類別,
-               c.hours AS 時數, c.source AS 訓練來源, c.method AS 上課方式,
-               CASE WHEN c.has_nursing_points = 1 THEN '是' ELSE '否' END AS 護理積分,
-               CASE WHEN c.has_ltc_points = 1 THEN '是' ELSE '否' END AS 長照積分,
-               COUNT(r.id) AS 完訓人數
-        FROM courses c
-        LEFT JOIN training_records r ON c.id = r.course_id
-        WHERE 1=1
-    '''
-    c_params = []
-    if category_filter:
-        course_query += " AND c.category = ?"
-        c_params.append(category_filter)
-    if points_filter == 'nursing':
-        course_query += " AND c.has_nursing_points = 1"
-    elif points_filter == 'ltc':
-        course_query += " AND c.has_ltc_points = 1"
-    elif points_filter == 'both':
-        course_query += " AND c.has_nursing_points = 1 AND c.has_ltc_points = 1"
-
-    if start_date:
-        course_query += " AND c.course_date >= ?"
-        c_params.append(start_date)
-    if end_date:
-        course_query += " AND c.course_date <= ?"
-        c_params.append(end_date)
-    course_query += " GROUP BY c.id ORDER BY c.course_date DESC"
-
-    df_course_summary = pd.read_sql_query(course_query, conn, params=c_params)
-
-    # 3. Sheet3: 完整完訓明細流水帳 (含積分)
-    detail_query = '''
-        SELECT e.emp_no AS 員工工號, e.name AS 員工姓名, e.position AS 職稱,
-               c.course_date AS 課程日期, r.completion_date AS 實際完訓日期,
-               c.title AS 課程名稱, c.category AS 課程類別, c.hours AS 時數,
-               c.source AS 訓練來源, c.method AS 上課方式,
-               CASE WHEN c.has_nursing_points = 1 THEN '是' ELSE '否' END AS 護理積分,
-               CASE WHEN c.has_ltc_points = 1 THEN '是' ELSE '否' END AS 長照積分
-        FROM training_records r
-        JOIN employees e ON r.employee_id = e.id
-        JOIN courses c ON r.course_id = c.id
-        WHERE 1=1
-    '''
-    d_params = []
-    if category_filter:
-        detail_query += " AND c.category = ?"
-        d_params.append(category_filter)
-    if points_filter == 'nursing':
-        detail_query += " AND c.has_nursing_points = 1"
-    elif points_filter == 'ltc':
-        detail_query += " AND c.has_ltc_points = 1"
-    elif points_filter == 'both':
-        detail_query += " AND c.has_nursing_points = 1 AND c.has_ltc_points = 1"
-
-    if start_date:
-        detail_query += " AND c.course_date >= ?"
-        d_params.append(start_date)
-    if end_date:
-        detail_query += " AND c.course_date <= ?"
-        d_params.append(end_date)
-    detail_query += " ORDER BY r.completion_date DESC, e.emp_no ASC"
-
-    df_details = pd.read_sql_query(detail_query, conn, params=d_params)
-
-    conn.close()
-
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_emp_summary.to_excel(writer, sheet_name='人員完訓時數總表', index=False)
-        df_course_summary.to_excel(writer, sheet_name='課程開課統計表', index=False)
-        df_details.to_excel(writer, sheet_name='完訓明細紀錄', index=False)
-
-    output.seek(0)
-    filename = f"護理之家_教育訓練簡易統計報表_{datetime.now().strftime('%Y%m%d')}.xlsx"
-    return send_file(output, download_name=filename, as_attachment=True)
-
+    filename = f"nursing_training_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
