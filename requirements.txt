@@ -2,4 +2,4 @@ Flask
 pandas
 openpyxl
 gunicorn
-libsql-experimental
+psycopg2-binary
