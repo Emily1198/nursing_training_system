@@ -11,6 +11,9 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "nursing_secret_key_secure_2026")
+
 # 1. 統一資料庫連接函數 (Supabase PostgreSQL)
 def get_db_connection():
     db_url = os.getenv("DATABASE_URL")
@@ -19,93 +22,99 @@ def get_db_connection():
     conn = psycopg2.connect(db_url)
     return conn
 
-app = Flask(__name__)
-app.secret_key = 'nursing_secret_key_secure_2026'
-
 # 2. 初始化資料庫 (PostgreSQL 語法)
 def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    # 建立使用者表
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username VARCHAR(100) UNIQUE NOT NULL,
-                    password VARCHAR(100) NOT NULL
-                )''')
-    c.execute("INSERT INTO users (username, password) VALUES ('admin', 'admin123') ON CONFLICT (username) DO NOTHING")
-    
-    # 建立員工表
-    c.execute('''CREATE TABLE IF NOT EXISTS employees (
-                    id SERIAL PRIMARY KEY,
-                    emp_no VARCHAR(50) UNIQUE,
-                    name VARCHAR(100) NOT NULL,
-                    position VARCHAR(100) NOT NULL,
-                    status VARCHAR(20) DEFAULT '在職'
-                )''')
-    
-    # 建立課程表
-    c.execute('''CREATE TABLE IF NOT EXISTS courses (
-                    id SERIAL PRIMARY KEY,
-                    course_date VARCHAR(20),
-                    title VARCHAR(200),
-                    category VARCHAR(100),
-                    hours REAL,
-                    source VARCHAR(100),
-                    method VARCHAR(100),
-                    has_nursing_points INTEGER DEFAULT 0,
-                    has_ltc_points INTEGER DEFAULT 0
-                )''')
-                
-    # PostgreSQL 自動補欄位機制
-    c.execute("""
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'courses'
-    """)
-    columns = [col[0] for col in c.fetchall()]
-    if 'has_nursing_points' not in columns:
-        c.execute("ALTER TABLE courses ADD COLUMN has_nursing_points INTEGER DEFAULT 0")
-    if 'has_ltc_points' not in columns:
-        c.execute("ALTER TABLE courses ADD COLUMN has_ltc_points INTEGER DEFAULT 0")
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        # 建立使用者表
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(100) UNIQUE NOT NULL,
+                        password VARCHAR(100) NOT NULL
+                    )''')
+        c.execute("INSERT INTO users (username, password) VALUES ('admin', 'admin123') ON CONFLICT (username) DO NOTHING")
+        
+        # 建立員工表
+        c.execute('''CREATE TABLE IF NOT EXISTS employees (
+                        id SERIAL PRIMARY KEY,
+                        emp_no VARCHAR(50) UNIQUE,
+                        name VARCHAR(100) NOT NULL,
+                        position VARCHAR(100) NOT NULL,
+                        status VARCHAR(20) DEFAULT '在職'
+                    )''')
+        
+        # 建立課程表
+        c.execute('''CREATE TABLE IF NOT EXISTS courses (
+                        id SERIAL PRIMARY KEY,
+                        course_date VARCHAR(20),
+                        title VARCHAR(200),
+                        category VARCHAR(100),
+                        hours REAL,
+                        source VARCHAR(100),
+                        method VARCHAR(100),
+                        has_nursing_points INTEGER DEFAULT 0,
+                        has_ltc_points INTEGER DEFAULT 0
+                    )''')
+                    
+        # PostgreSQL 自動補欄位機制
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'courses'
+        """)
+        columns = [col[0] for col in c.fetchall()]
+        if 'has_nursing_points' not in columns:
+            c.execute("ALTER TABLE courses ADD COLUMN has_nursing_points INTEGER DEFAULT 0")
+        if 'has_ltc_points' not in columns:
+            c.execute("ALTER TABLE courses ADD COLUMN has_ltc_points INTEGER DEFAULT 0")
 
-    # 建立完訓紀錄表
-    c.execute('''CREATE TABLE IF NOT EXISTS training_records (
-                    id SERIAL PRIMARY KEY,
-                    course_id INTEGER,
-                    employee_id INTEGER,
-                    completion_date VARCHAR(20),
-                    UNIQUE(course_id, employee_id)
-                )''')
+        # 建立完訓紀錄表
+        c.execute('''CREATE TABLE IF NOT EXISTS training_records (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER,
+                        employee_id INTEGER,
+                        completion_date VARCHAR(20),
+                        UNIQUE(course_id, employee_id)
+                    )''')
 
-    # 建立下拉選項表
-    c.execute('''CREATE TABLE IF NOT EXISTS dropdown_options (
-                    id SERIAL PRIMARY KEY,
-                    category_type VARCHAR(50) NOT NULL,
-                    option_name VARCHAR(100) NOT NULL,
-                    UNIQUE(category_type, option_name)
-                )''')
-    
-    default_options = [
-        ('position', '院長/護理師'), ('position', '主任/護理師'), ('position', '護理師'),
-        ('position', '照服員'), ('position', '社工師'), ('position', '營養師'), ('position', '其他'),
-        ('course_category', '傳染病與群聚事件'), ('course_category', '感染管制'),
-        ('course_category', '消防安全'), ('course_category', '緊急應變'), ('course_category', '性別平等'), ('course_category', '其他'),
-        ('source', '長照平台'), ('source', '內訓'), ('source', '外訓'),
-        ('method', '線上'), ('method', '實體')
-    ]
-    
-    for cat_type, opt_name in default_options:
-        c.execute(
-            "INSERT INTO dropdown_options (category_type, option_name) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (cat_type, opt_name)
-        )
+        # 建立下拉選項表
+        c.execute('''CREATE TABLE IF NOT EXISTS dropdown_options (
+                        id SERIAL PRIMARY KEY,
+                        category_type VARCHAR(50) NOT NULL,
+                        option_name VARCHAR(100) NOT NULL,
+                        UNIQUE(category_type, option_name)
+                    )''')
+        
+        default_options = [
+            ('position', '院長/護理師'), ('position', '主任/護理師'), ('position', '護理師'),
+            ('position', '照服員'), ('position', '社工師'), ('position', '營養師'), ('position', '其他'),
+            ('course_category', '傳染病與群聚事件'), ('course_category', '感染管制'),
+            ('course_category', '消防安全'), ('course_category', '緊急應變'), ('course_category', '性別平等'), ('course_category', '其他'),
+            ('source', '長照平台'), ('source', '內訓'), ('source', '外訓'),
+            ('method', '線上'), ('method', '實體')
+        ]
+        
+        for cat_type, opt_name in default_options:
+            c.execute(
+                "INSERT INTO dropdown_options (category_type, option_name) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (cat_type, opt_name)
+            )
 
-    conn.commit()
-    c.close()
-    conn.close()
+        conn.commit()
+        c.close()
+        conn.close()
+        print("✅ 資料庫初始化完成。")
+    except Exception as e:
+        print(f"❌ 資料庫初始化失敗: {e}")
 
-init_db()
+# 在 Flask 第一次請求前執行初始化驗證，避免應用程式載入即崩潰
+@app.before_request
+def setup():
+    if not getattr(app, '_got_first_request', False):
+        init_db()
+        app._got_first_request = True
 
 def login_required(f):
     @wraps(f)
@@ -129,7 +138,7 @@ LOGIN_TEMPLATE = '''
 <div class="text-center" style="width: 100%; max-width: 400px;">
     <div class="mb-4">
         <h2 class="fw-bold text-primary mb-1">🏥 護理訓練管理系統</h2>
-        <p class="text-muted small mb-0">家園教育訓練與完訓統計管理平台</p>
+        <p class="text-muted small mb-0">教育訓練與完訓統計管理平台</p>
     </div>
     <div class="card shadow-lg text-start">
         <div class="card-header bg-dark text-white text-center py-3">
@@ -166,17 +175,15 @@ HTML_TEMPLATE = '''
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>家園教育訓練統計管理系統</title>
+    <title>教育訓練統計管理系統</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light pb-5">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow">
     <div class="container-fluid">
-        <span class="navbar-brand mb-0 h1">🏥 家園教育訓練統計管理系統</span>
+        <span class="navbar-brand mb-0 h1">🏥 教育訓練統計管理系統</span>
         <div class="d-flex align-items-center">
             <span class="text-light me-3 small">👤 目前使用者：<strong>{{ session['username'] }}</strong></span>
-            <button class="btn btn-sm btn-outline-info me-2" data-bs-toggle="modal" data-bs-target="#optionsModal">⚙️ 下拉選單管理</button>
-            <button class="btn btn-sm btn-outline-warning me-2" data-bs-toggle="modal" data-bs-target="#accountModal">🔒 帳號/密碼設定</button>
             <a href="/logout" class="btn btn-sm btn-outline-light">🚪 登出</a>
         </div>
     </div>
